@@ -5,7 +5,7 @@ import {
 import { extractTextFromCode } from '@/component/message_iframe/utils';
 import { script_url } from '@/script_url';
 import third_party from '@/third_party.html';
-import { translateHtmlContent } from '@/translator';
+import { translateIframeContent } from '@/translator';
 import { getCharAvatarPath, getSettingValue, getUserAvatarPath, saveSettingValue } from '@/util/extension_variables';
 
 import { eventSource, event_types, reloadCurrentChat, this_chid, updateMessageBlock } from '@sillytavern/script';
@@ -84,14 +84,9 @@ async function renderMessagesInIframes(mode = RENDER_MODES.FULL, specificMesId: 
 
     let iframeCounter = 1;
 
-    $codeElements.each(async function () {
-      let extractedText = extractTextFromCode(this);
+    for (const codeElement of $codeElements) {
+      let extractedText = extractTextFromCode(codeElement);
 
-      // Translate content if enabled
-      if (getSettingValue('render.translator_enabled')) {
-        extractedText = await translateHtmlContent(extractedText);
-      }
-      
       if (extractedText.includes('<body') && extractedText.includes('</body>')) {
         const disableLoading = /<!--\s*disable-default-loading\s*-->/.test(extractedText);
         const hasMinVh = /min-height:\s*[^;]*vh/.test(extractedText);
@@ -171,7 +166,13 @@ async function renderMessagesInIframes(mode = RENDER_MODES.FULL, specificMesId: 
 
         $iframe.attr('srcdoc', srcdocContent);
 
-        $iframe.on('load', function () {
+        $iframe.on('load', async function () {
+          // Translate the content AFTER the iframe has loaded and its internal scripts have run.
+          if (getSettingValue('render.translator_enabled')) {
+            console.log('[Translator] Translating content of iframe:', this.id);
+            await translateIframeContent(this);
+          }
+
           observeIframeContent(this);
 
           $wrapper = $(this).parent();
@@ -205,11 +206,11 @@ async function renderMessagesInIframes(mode = RENDER_MODES.FULL, specificMesId: 
         });
 
         eventSource.emitAndWait('message_iframe_render_started', $iframe.attr('id'));
-        $(this).replaceWith($wrapper);
+        $(codeElement).replaceWith($wrapper);
       } else {
-        addToggleButtonToCodeBlock($(this));
+        addToggleButtonToCodeBlock($(codeElement));
       }
-    });
+    }
   }
 }
 

@@ -51,45 +51,40 @@ function translateBatch(texts: string): Promise<string[]> {
 }
 
 /**
- * Takes an HTML string, finds all Chinese text within it, translates it,
- * and returns the translated HTML string.
- * @param html The input HTML string.
- * @returns A promise that resolves with the translated HTML string.
+ * Finds all Chinese text within a live iframe's body, translates it,
+ * and replaces the content in-place.
+ * @param iframe The live HTMLIFrameElement to translate.
  */
-export async function translateHtmlContent(html: string): Promise<string> {
+export async function translateIframeContent(iframe: HTMLIFrameElement): Promise<void> {
     try {
-        // 1. Parse the HTML string into a DOM fragment
-        const template = document.createElement('template');
-        template.innerHTML = html.trim();
-        const content = template.content;
-
-        // 2. Collect all relevant text nodes
-        const textNodes: Node[] = [];
-        collectTextNodes(content, textNodes);
-
-        if (textNodes.length === 0) {
-            return html; // No translation needed
+        const body = iframe.contentWindow?.document.body;
+        if (!body) {
+            console.error("Translator: Iframe body not found.");
+            return;
         }
 
-        // 3. Batch translate the text
+        // 1. Collect all relevant text nodes from the live iframe DOM
+        const textNodes: Node[] = [];
+        collectTextNodes(body, textNodes);
+
+        if (textNodes.length === 0) {
+            return; // No translation needed
+        }
+
+        // 2. Batch translate the text
         const originalTexts = textNodes.map(node => node.textContent || '');
         const joinedText = originalTexts.join("=|==|=");
         const translatedTexts = await translateBatch(joinedText);
 
-        // 4. Replace original text nodes with translated text
+        // 3. Replace original text nodes with translated text
         if (originalTexts.length === translatedTexts.length) {
             textNodes.forEach((node, index) => {
                 node.textContent = translatedTexts[index];
             });
         } else {
             console.error("Translator: Mismatch between original and translated text counts.");
-            return html; // Return original HTML on error
         }
-
-        // 5. Serialize the fragment back to an HTML string
-        return template.innerHTML;
     } catch (error) {
-        console.error("Translator: Failed to translate HTML content.", error);
-        return html; // Return original HTML on error
+        console.error("Translator: Failed to translate iframe content.", error);
     }
 }
