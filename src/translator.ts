@@ -69,13 +69,95 @@ function collectTranslationTargets(node: Node, targets: TranslationTarget[]) {
  * @param texts The texts to translate, joined by a separator.
  * @returns A promise that resolves with the translated texts.
  */
-function translateBatch(texts: string): Promise<string[]> {
+// In-memory cache for the custom dictionary
+let customDictionary: Map<string, string> = new Map();
+
+/**
+ * Parses the dictionary text from the textarea and updates the in-memory map.
+ */
+function parseCustomDictionary() {
+    const textarea = document.getElementById('custom-dictionary') as HTMLTextAreaElement | null;
+    if (!textarea) return;
+
+    const text = textarea.value;
+    const newDictionary = new Map<string, string>();
+    const lines = text.split('\n');
+
+    for (const line of lines) {
+        const parts = line.split('=');
+        if (parts.length === 2) {
+            const original = parts[0].trim();
+            const translated = parts[1].trim();
+            if (original && translated) {
+                newDictionary.set(original, translated);
+            }
+        }
+    }
+    customDictionary = newDictionary;
+}
+
+/**
+ * Saves the custom dictionary to localStorage.
+ */
+function saveCustomDictionary() {
+    const textarea = document.getElementById('custom-dictionary') as HTMLTextAreaElement | null;
+    if (textarea) {
+        localStorage.setItem('custom-dictionary', textarea.value);
+    }
+}
+
+/**
+ * Loads the custom dictionary from localStorage.
+ */
+function loadCustomDictionary() {
+    const textarea = document.getElementById('custom-dictionary') as HTMLTextAreaElement | null;
+    if (textarea) {
+        textarea.value = localStorage.getItem('custom-dictionary') || '';
+        parseCustomDictionary();
+        // Add event listeners to update the dictionary on change and save it
+        textarea.addEventListener('input', parseCustomDictionary);
+        textarea.addEventListener('change', saveCustomDictionary);
+    }
+}
+
+/**
+ * Translates a batch of texts, prioritizing the custom dictionary.
+ * @param texts The texts to translate.
+ * @returns A promise that resolves with the translated texts.
+ */
+function translateBatch(texts: string[]): Promise<string[]> {
+    const textsToTranslate: string[] = [];
+    const results: (string | null)[] = Array(texts.length).fill(null);
+
+    // First, use the custom dictionary
+    texts.forEach((text, index) => {
+        if (customDictionary.has(text)) {
+            results[index] = customDictionary.get(text)!;
+        } else {
+            textsToTranslate.push(text);
+        }
+    });
+
+    // If all texts were found in the dictionary, return immediately
+    if (textsToTranslate.length === 0) {
+        return Promise.resolve(results as string[]);
+    }
+
+    // Translate the remaining texts using the server
+    const joinedText = textsToTranslate.join("=|==|=");
     return new Promise((resolve, reject) => {
         const ajax = new XMLHttpRequest();
         ajax.onreadystatechange = function () {
             if (this.readyState == 4) {
                 if (this.status == 200) {
-                    resolve(this.responseText.split("=|==|="));
+                    const translatedFromServer = this.responseText.split("=|==|=");
+                    let serverIndex = 0;
+                    for (let i = 0; i < results.length; i++) {
+                        if (results[i] === null) {
+                            results[i] = translatedFromServer[serverIndex++];
+                        }
+                    }
+                    resolve(results as string[]);
                 } else {
                     reject(new Error(`Translation server failed with status ${this.status}`));
                 }
@@ -83,7 +165,7 @@ function translateBatch(texts: string): Promise<string[]> {
         };
         ajax.open("POST", `//${stvServer}/`, true);
         ajax.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-        oldSend.apply(ajax, ["sajax=trans&content=" + encodeURIComponent(texts)]);
+        oldSend.apply(ajax, ["sajax=trans&content=" + encodeURIComponent(joinedText)]);
     });
 }
 
@@ -107,8 +189,7 @@ async function translateNode(node: Node): Promise<void> {
 
     // 2. Batch translate the text from all targets
     const originalTexts = targets.map(target => target.getText() || '');
-    const joinedText = originalTexts.join("=|==|=");
-    const translatedTexts = await translateBatch(joinedText);
+    const translatedTexts = await translateBatch(originalTexts);
 
     // 3. Replace original content with translated text
     if (originalTexts.length === translatedTexts.length) {
@@ -142,25 +223,37 @@ export async function translateIframeContent(iframe: HTMLIFrameElement): Promise
             return;
         }
 
-        // 1. Perform an initial translation of the entire document body
+        // 1. Load the custom dictionary first
+        loadCustomDictionary();
+
+        // 2. Perform an initial translation of the entire document body
         await translateNode(body);
 
-        // 2. Set up an observer to handle dynamically added/changed content
+        // 3. Set up an observer to handle dynamically added/changed content
         const observer = new MutationObserver(async (mutations) => {
             // Disconnect the observer temporarily to prevent infinite loops
-            // from the translations we are about to make.
             observer.disconnect();
 
             const nodesToTranslate = new Set<Node>();
             for (const mutation of mutations) {
-                if (mutation.type === 'childList') {
-                    mutation.addedNodes.forEach(node => {
-                        if (node.nodeType === 1 || node.nodeType === 3) {
-                            nodesToTranslate.add(node);
+                switch (mutation.type) {
+                    case 'childList':
+                        mutation.addedNodes.forEach(node => {
+                            if (node.nodeType === 1 || node.nodeType === 3) {
+                                nodesToTranslate.add(node);
+                            }
+                        });
+                        break;
+                    case 'attributes':
+                        nodesToTranslate.add(mutation.target);
+                        break;
+                    case 'characterData':
+                        // If a text node's data changes, re-translate its parent
+                        // to handle the change in context.
+                        if (mutation.target.parentElement) {
+                            nodesToTranslate.add(mutation.target.parentElement);
                         }
-                    });
-                } else if (mutation.type === 'attributes') {
-                    nodesToTranslate.add(mutation.target);
+                        break;
                 }
             }
 
@@ -174,21 +267,11 @@ export async function translateIframeContent(iframe: HTMLIFrameElement): Promise
             }
 
             // 4. Reconnect the observer to watch for future changes
-            observer.observe(body, {
-                childList: true,
-                subtree: true,
-                attributes: true,
-                attributeFilter: translatableAttributes,
-            });
+            startObserver(observer, body);
         });
 
         // 3. Start observing the iframe body for changes
-        observer.observe(body, {
-            childList: true,    // For added/removed nodes
-            subtree: true,      // To include all descendants
-            attributes: true,   // For attribute changes
-            attributeFilter: translatableAttributes, // Only watch attributes we can translate
-        });
+        startObserver(observer, body);
 
         // Mark this iframe as observed so we don't attach another observer
         observedIframes.add(iframe);
@@ -196,4 +279,19 @@ export async function translateIframeContent(iframe: HTMLIFrameElement): Promise
     } catch (error) {
         console.error("Translator: Failed to translate iframe content.", error);
     }
+}
+
+/**
+ * Starts the mutation observer with the correct options.
+ * @param observer The MutationObserver instance.
+ * @param target The node to observe.
+ */
+function startObserver(observer: MutationObserver, target: Node) {
+    observer.observe(target, {
+        childList: true,        // For added/removed nodes
+        subtree: true,          // To include all descendants
+        attributes: true,       // For attribute changes
+        attributeFilter: translatableAttributes, // Only watch specified attributes
+        characterData: true,    // Watch for changes to text node content
+    });
 }
