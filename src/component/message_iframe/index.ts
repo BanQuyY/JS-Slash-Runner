@@ -23,6 +23,7 @@ export const defaultIframeSettings = {
   tampermonkey_compatibility: false,
   render_depth: 0,
   render_optimize: false,
+  translator_enabled: true,
 };
 
 /**
@@ -145,6 +146,13 @@ export async function initIframePanel() {
   addRenderQuickButton();
   injectLoadingStyles();
   setupIframeRemovalListener();
+
+  // 处理翻译设置
+  const isTranslatorEnabled = getSettingValue('render.translator_enabled') ?? defaultIframeSettings.translator_enabled;
+  handleTranslatorEnableToggle(isTranslatorEnabled, false);
+  $('#translator-enable-toggle')
+    .prop('checked', isTranslatorEnabled)
+    .on('click', (event: JQuery.ClickEvent) => handleTranslatorEnableToggle(event.target.checked, true));
 }
 
 /**
@@ -230,5 +238,18 @@ export async function handleRenderingOptimizationToggle(enable: boolean, userInp
     if (userInput) {
       await clearAndRenderAllIframes();
     }
+  }
+}
+
+/**
+ * 处理翻译启用设置改变
+ * @param enable 是否启用翻译
+ * @param userInput 是否由用户手动触发
+ */
+export async function handleTranslatorEnableToggle(enable: boolean, userInput: boolean = true) {
+  if (userInput) {
+    saveSettingValue('render.translator_enabled', enable);
+    // A page reload might be the simplest way to apply the change
+    toastr.info('翻译设置已更改，建议刷新页面以应用。');
   }
 }

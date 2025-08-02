@@ -1,7 +1,7 @@
 import { defaultAudioSettings, initAudioComponents } from '@/component/audio';
+import { initExtensionMainPanel } from '@/component/index';
 import { initListener } from '@/component/listener';
 import { renderAllMacros } from '@/component/macrolike';
-import { initExtensionMainPanel } from '@/component/index';
 import { defaultIframeSettings, initIframePanel } from '@/component/message_iframe';
 import { initReference } from '@/component/reference';
 import { buildScriptRepository } from '@/component/script_repository/index';
@@ -26,6 +26,7 @@ import {
   getOrSaveSettingValue,
   saveSettingValue,
 } from '@/util/extension_variables';
+import { initTranslator } from './translator';
 
 import { event_types, eventSource, saveSettings } from '@sillytavern/script';
 import { extension_settings, renderExtensionTemplateAsync } from '@sillytavern/scripts/extensions';
@@ -203,6 +204,7 @@ jQuery(async () => {
     await initReference();
     await initListener();
     initVariableManager();
+    initTranslator();
   });
 
   // 通用Collapsible折叠功能
