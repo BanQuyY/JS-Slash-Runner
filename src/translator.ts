@@ -3,27 +3,64 @@ const chineseRegex = /[\u3400-\u9FBF]/;
 const oldSend = XMLHttpRequest.prototype.send;
 
 /**
- * Recursively traverses a DOM node, collects all text nodes with Chinese characters,
- * and stores them in an array.
- * @param node The DOM node to traverse.
- * @param textNodes An array to store the found text nodes.
+ * Defines a target for translation, which can be a text node or an element's attribute.
  */
-function collectTextNodes(node: Node, textNodes: Node[]) {
-    if (node.nodeType === 3) { // Text node
+interface TranslationTarget {
+    getText(): string | null;
+    setText(text: string): void;
+}
+
+// List of attributes that are safe to translate.
+const translatableAttributes = ['title', 'placeholder', 'alt', 'value'];
+
+/**
+ * Recursively traverses a DOM node, collecting all translatable content
+ * (text nodes and specific attributes) into an array of targets.
+ * @param node The DOM node to traverse.
+ * @param targets An array to store the found TranslationTargets.
+ */
+function collectTranslationTargets(node: Node, targets: TranslationTarget[]) {
+    // 1. Skip non-element and non-text nodes
+    if (node.nodeType !== 1 && node.nodeType !== 3) {
+        return;
+    }
+
+    // 2. Handle Text Nodes
+    if (node.nodeType === 3) {
         if (node.textContent && chineseRegex.test(node.textContent)) {
-            textNodes.push(node);
+            targets.push({
+                getText: () => node.textContent,
+                setText: (text: string) => { node.textContent = text; },
+            });
         }
         return;
     }
 
-    if (node.nodeType === 1) { // Element node
-        const tagName = (node as Element).tagName;
-        if (tagName === 'SCRIPT' || tagName === 'STYLE') {
-            return;
+    // 3. Handle Element Nodes
+    const element = node as Element;
+    const tagName = element.tagName;
+
+    // Skip script/style tags completely
+    if (tagName === 'SCRIPT' || tagName === 'STYLE') {
+        return;
+    }
+
+    // Check specified attributes for translatable text
+    for (const attrName of translatableAttributes) {
+        if (element.hasAttribute(attrName)) {
+            const value = element.getAttribute(attrName);
+            if (value && chineseRegex.test(value)) {
+                targets.push({
+                    getText: () => element.getAttribute(attrName),
+                    setText: (text: string) => element.setAttribute(attrName, text),
+                });
+            }
         }
-        for (const child of Array.from(node.childNodes)) {
-            collectTextNodes(child, textNodes);
-        }
+    }
+
+    // 4. Recurse into child nodes
+    for (const child of Array.from(node.childNodes)) {
+        collectTranslationTargets(child, targets);
     }
 }
 
@@ -63,23 +100,23 @@ export async function translateIframeContent(iframe: HTMLIFrameElement): Promise
             return;
         }
 
-        // 1. Collect all relevant text nodes from the live iframe DOM
-        const textNodes: Node[] = [];
-        collectTextNodes(body, textNodes);
+        // 1. Collect all translatable targets from the live iframe DOM
+        const targets: TranslationTarget[] = [];
+        collectTranslationTargets(body, targets);
 
-        if (textNodes.length === 0) {
+        if (targets.length === 0) {
             return; // No translation needed
         }
 
-        // 2. Batch translate the text
-        const originalTexts = textNodes.map(node => node.textContent || '');
+        // 2. Batch translate the text from all targets
+        const originalTexts = targets.map(target => target.getText() || '');
         const joinedText = originalTexts.join("=|==|=");
         const translatedTexts = await translateBatch(joinedText);
 
-        // 3. Replace original text nodes with translated text
+        // 3. Replace original content with translated text
         if (originalTexts.length === translatedTexts.length) {
-            textNodes.forEach((node, index) => {
-                node.textContent = translatedTexts[index];
+            targets.forEach((target, index) => {
+                target.setText(translatedTexts[index]);
             });
         } else {
             console.error("Translator: Mismatch between original and translated text counts.");
