@@ -107,12 +107,14 @@ function saveCustomDictionary() {
 }
 
 /**
- * Loads the custom dictionary from localStorage.
+ * Loads the custom dictionary from localStorage and sets up event listeners.
+ * This should be called once when the UI is initialized.
  */
-function loadCustomDictionary() {
+export function initializeCustomDictionary() {
     const textarea = document.getElementById('custom-dictionary') as HTMLTextAreaElement | null;
     if (textarea) {
         textarea.value = localStorage.getItem('custom-dictionary') || '';
+        // Parse the initial content
         parseCustomDictionary();
         // Add event listeners to update the dictionary on change and save it
         textarea.addEventListener('input', parseCustomDictionary);
@@ -223,10 +225,8 @@ export async function translateIframeContent(iframe: HTMLIFrameElement): Promise
             return;
         }
 
-        // 1. Load the custom dictionary first
-        loadCustomDictionary();
-
-        // 2. Perform an initial translation of the entire document body
+        // 1. Perform an initial translation of the entire document body
+        // The custom dictionary is assumed to be initialized and parsed already.
         await translateNode(body);
 
         // 3. Set up an observer to handle dynamically added/changed content

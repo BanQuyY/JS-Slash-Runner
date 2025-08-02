@@ -14,6 +14,7 @@ import {
   addRenderingOptimizeSettings,
   removeRenderingOptimizeSettings,
 } from '@/component/message_iframe/render_optimize';
+import { initializeCustomDictionary } from '@/translator';
 import { getSettingValue, saveSettingValue } from '@/util/extension_variables';
 
 import { reloadCurrentChat, this_chid } from '@sillytavern/script';
@@ -172,6 +173,9 @@ export async function initIframePanel() {
   $('#translator-enable-toggle')
     .prop('checked', isTranslatorEnabled)
     .on('click', (event: JQuery.ClickEvent) => handleTranslatorEnableToggle(event.target.checked, true));
+
+  // Initialize the custom dictionary regardless of the translator toggle state
+  initializeCustomDictionary();
 }
 
 /**
