@@ -124,42 +124,68 @@ export function initializeCustomDictionary() {
 
 /**
  * Translates a batch of texts, prioritizing the custom dictionary.
- * @param texts The texts to translate.
+ * This function implements a placeholder strategy to ensure custom dictionary
+ * entries are respected within larger text blocks.
+ * @param originalTexts The texts to translate.
  * @returns A promise that resolves with the translated texts.
  */
-function translateBatch(texts: string[]): Promise<string[]> {
-    const textsToTranslate: string[] = [];
-    const results: (string | null)[] = Array(texts.length).fill(null);
+function translateBatch(originalTexts: string[]): Promise<string[]> {
+    const textsForServer: string[] = [];
+    const placeholderMaps: Map<string, string>[] = [];
 
-    // First, use the custom dictionary
-    texts.forEach((text, index) => {
-        if (customDictionary.has(text)) {
-            results[index] = customDictionary.get(text)!;
-        } else {
-            textsToTranslate.push(text);
-        }
+    // Step 1: Pre-process texts. Replace dictionary words with placeholders.
+    originalTexts.forEach(text => {
+        let processedText = text;
+        const currentPlaceholderMap = new Map<string, string>();
+        let placeholderIndex = 0;
+
+        customDictionary.forEach((translated, original) => {
+            if (processedText.includes(original)) {
+                const placeholder = `__D${placeholderIndex}__`;
+                // Use a regex to replace all occurrences
+                processedText = processedText.replace(new RegExp(original, 'g'), placeholder);
+                currentPlaceholderMap.set(placeholder, translated);
+                placeholderIndex++;
+            }
+        });
+
+        textsForServer.push(processedText);
+        placeholderMaps.push(currentPlaceholderMap);
     });
 
-    // If all texts were found in the dictionary, return immediately
-    if (textsToTranslate.length === 0) {
-        return Promise.resolve(results as string[]);
+    // Step 2: Translate the processed texts with the server.
+    const joinedText = textsForServer.join("=|==|=");
+
+    // If there's nothing to translate (e.g., everything was in the dictionary),
+    // just do the placeholder replacement and return.
+    if (!chineseRegex.test(joinedText)) {
+        const finalResults = textsForServer.map((text, i) => {
+            let result = text;
+            placeholderMaps[i].forEach((translated, placeholder) => {
+                result = result.replace(new RegExp(placeholder, 'g'), translated);
+            });
+            return result;
+        });
+        return Promise.resolve(finalResults);
     }
 
-    // Translate the remaining texts using the server
-    const joinedText = textsToTranslate.join("=|==|=");
     return new Promise((resolve, reject) => {
         const ajax = new XMLHttpRequest();
         ajax.onreadystatechange = function () {
             if (this.readyState == 4) {
                 if (this.status == 200) {
                     const translatedFromServer = this.responseText.split("=|==|=");
-                    let serverIndex = 0;
-                    for (let i = 0; i < results.length; i++) {
-                        if (results[i] === null) {
-                            results[i] = translatedFromServer[serverIndex++];
-                        }
-                    }
-                    resolve(results as string[]);
+                    
+                    // Step 3: Post-process. Replace placeholders back.
+                    const finalResults = translatedFromServer.map((translatedText, i) => {
+                        let result = translatedText;
+                        const currentPlaceholderMap = placeholderMaps[i];
+                        currentPlaceholderMap.forEach((translated, placeholder) => {
+                            result = result.replace(new RegExp(placeholder, 'g'), translated);
+                        });
+                        return result;
+                    });
+                    resolve(finalResults);
                 } else {
                     reject(new Error(`Translation server failed with status ${this.status}`));
                 }
