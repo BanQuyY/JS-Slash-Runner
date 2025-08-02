@@ -147,9 +147,28 @@ export async function initIframePanel() {
   injectLoadingStyles();
   setupIframeRemovalListener();
 
-  // 处理翻译设置
+  // Programmatically add the translator toggle to ensure it exists.
+  const translatorToggleHtml = `
+    <div class="divider"></div>
+    <div class="extension-content-item">
+      <div class="flex flexFlowColumn">
+        <div class="settings-title-text">启用脚本翻译</div>
+        <div class="settings-title-description">启用后，将自动翻译脚本渲染内容中的中文</div>
+      </div>
+      <div class="toggle-switch">
+        <input type="checkbox" id="translator-enable-toggle" class="toggle-input" />
+        <label for="translator-enable-toggle" class="toggle-label">
+          <span class="toggle-handle"></span>
+        </label>
+      </div>
+    </div>
+  `;
+  if ($('#translator-enable-toggle').length === 0) {
+      $('#render-settings-content').append(translatorToggleHtml);
+  }
+
+  // Handle translator settings
   const isTranslatorEnabled = getSettingValue('render.translator_enabled') ?? defaultIframeSettings.translator_enabled;
-  handleTranslatorEnableToggle(isTranslatorEnabled, false);
   $('#translator-enable-toggle')
     .prop('checked', isTranslatorEnabled)
     .on('click', (event: JQuery.ClickEvent) => handleTranslatorEnableToggle(event.target.checked, true));
@@ -249,7 +268,7 @@ export async function handleRenderingOptimizationToggle(enable: boolean, userInp
 export async function handleTranslatorEnableToggle(enable: boolean, userInput: boolean = true) {
   if (userInput) {
     saveSettingValue('render.translator_enabled', enable);
-    // A page reload might be the simplest way to apply the change
-    toastr.info('翻译设置已更改，建议刷新页面以应用。');
+    toastr.info('翻译设置已更改，正在重新加载聊天以应用...');
+    await clearAndRenderAllIframes();
   }
 }

@@ -5,6 +5,7 @@ import {
 import { extractTextFromCode } from '@/component/message_iframe/utils';
 import { script_url } from '@/script_url';
 import third_party from '@/third_party.html';
+import { translateHtmlContent } from '@/translator';
 import { getCharAvatarPath, getSettingValue, getUserAvatarPath, saveSettingValue } from '@/util/extension_variables';
 
 import { eventSource, event_types, reloadCurrentChat, this_chid, updateMessageBlock } from '@sillytavern/script';
@@ -83,8 +84,14 @@ async function renderMessagesInIframes(mode = RENDER_MODES.FULL, specificMesId: 
 
     let iframeCounter = 1;
 
-    $codeElements.each(function () {
+    $codeElements.each(async function () {
       let extractedText = extractTextFromCode(this);
+
+      // Translate content if enabled
+      if (getSettingValue('render.translator_enabled')) {
+        extractedText = await translateHtmlContent(extractedText);
+      }
+      
       if (extractedText.includes('<body') && extractedText.includes('</body>')) {
         const disableLoading = /<!--\s*disable-default-loading\s*-->/.test(extractedText);
         const hasMinVh = /min-height:\s*[^;]*vh/.test(extractedText);
