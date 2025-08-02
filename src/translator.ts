@@ -92,35 +92,107 @@ function translateBatch(texts: string): Promise<string[]> {
  * and replaces the content in-place.
  * @param iframe The live HTMLIFrameElement to translate.
  */
+/**
+ * Translates a single DOM node and its children.
+ * @param node The DOM node to translate.
+ */
+async function translateNode(node: Node): Promise<void> {
+    // 1. Collect all translatable targets from the node and its descendants
+    const targets: TranslationTarget[] = [];
+    collectTranslationTargets(node, targets);
+
+    if (targets.length === 0) {
+        return; // No translation needed for this node
+    }
+
+    // 2. Batch translate the text from all targets
+    const originalTexts = targets.map(target => target.getText() || '');
+    const joinedText = originalTexts.join("=|==|=");
+    const translatedTexts = await translateBatch(joinedText);
+
+    // 3. Replace original content with translated text
+    if (originalTexts.length === translatedTexts.length) {
+        targets.forEach((target, index) => {
+            target.setText(translatedTexts[index]);
+        });
+    } else {
+        console.error("Translator: Mismatch between original and translated text counts.");
+    }
+}
+
+// Use a WeakSet to keep track of iframes that are already being observed
+const observedIframes = new WeakSet<HTMLIFrameElement>();
+
+/**
+ * Finds all Chinese text within a live iframe's body, translates it,
+ * and replaces the content in-place. It also sets up a MutationObserver
+ * to handle dynamically loaded content.
+ * @param iframe The live HTMLIFrameElement to translate.
+ */
 export async function translateIframeContent(iframe: HTMLIFrameElement): Promise<void> {
     try {
+        // Ensure we only attach one observer per iframe to prevent duplicates
+        if (observedIframes.has(iframe)) {
+            return;
+        }
+
         const body = iframe.contentWindow?.document.body;
         if (!body) {
             console.error("Translator: Iframe body not found.");
             return;
         }
 
-        // 1. Collect all translatable targets from the live iframe DOM
-        const targets: TranslationTarget[] = [];
-        collectTranslationTargets(body, targets);
+        // 1. Perform an initial translation of the entire document body
+        await translateNode(body);
 
-        if (targets.length === 0) {
-            return; // No translation needed
-        }
+        // 2. Set up an observer to handle dynamically added/changed content
+        const observer = new MutationObserver(async (mutations) => {
+            // Disconnect the observer temporarily to prevent infinite loops
+            // from the translations we are about to make.
+            observer.disconnect();
 
-        // 2. Batch translate the text from all targets
-        const originalTexts = targets.map(target => target.getText() || '');
-        const joinedText = originalTexts.join("=|==|=");
-        const translatedTexts = await translateBatch(joinedText);
+            const nodesToTranslate = new Set<Node>();
+            for (const mutation of mutations) {
+                if (mutation.type === 'childList') {
+                    mutation.addedNodes.forEach(node => {
+                        if (node.nodeType === 1 || node.nodeType === 3) {
+                            nodesToTranslate.add(node);
+                        }
+                    });
+                } else if (mutation.type === 'attributes') {
+                    nodesToTranslate.add(mutation.target);
+                }
+            }
 
-        // 3. Replace original content with translated text
-        if (originalTexts.length === translatedTexts.length) {
-            targets.forEach((target, index) => {
-                target.setText(translatedTexts[index]);
+            if (nodesToTranslate.size > 0) {
+                const translationPromises = Array.from(nodesToTranslate).map(n => translateNode(n));
+                try {
+                    await Promise.all(translationPromises);
+                } catch (err) {
+                    console.error("Translator: Failed to translate dynamic content.", err);
+                }
+            }
+
+            // 4. Reconnect the observer to watch for future changes
+            observer.observe(body, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: translatableAttributes,
             });
-        } else {
-            console.error("Translator: Mismatch between original and translated text counts.");
-        }
+        });
+
+        // 3. Start observing the iframe body for changes
+        observer.observe(body, {
+            childList: true,    // For added/removed nodes
+            subtree: true,      // To include all descendants
+            attributes: true,   // For attribute changes
+            attributeFilter: translatableAttributes, // Only watch attributes we can translate
+        });
+
+        // Mark this iframe as observed so we don't attach another observer
+        observedIframes.add(iframe);
+
     } catch (error) {
         console.error("Translator: Failed to translate iframe content.", error);
     }
