@@ -175,20 +175,11 @@ export function initializeTranslator() {
  * @returns A promise that resolves with the translated texts.
  */
 function translateBatch(originalTexts: string[]): Promise<string[]> {
-    // Step 1: Apply deletion regexes first.
-    const cleanedTexts = originalTexts.map(text => {
-        let currentText = text;
-        for (const regex of deletionRegexes) {
-            currentText = currentText.replace(regex, '');
-        }
-        return currentText;
-    });
-
     const textsForServer: string[] = [];
     const placeholderMaps: Map<string, string>[] = [];
 
-    // Step 2: Pre-process texts. Replace dictionary words with placeholders.
-    cleanedTexts.forEach(text => {
+    // Step 1: Pre-process texts. Replace dictionary words with placeholders.
+    originalTexts.forEach(text => {
         let processedText = text;
         const currentPlaceholderMap = new Map<string, string>();
         let placeholderIndex = 0;
@@ -257,17 +248,51 @@ function translateBatch(originalTexts: string[]): Promise<string[]> {
  * @param iframe The live HTMLIFrameElement to translate.
  */
 /**
- * Translates a single DOM node and its children.
- * @param node The DOM node to translate.
+ * Recursively traverses a DOM node and applies deletion regexes to all text nodes.
+ * @param node The DOM node to clean.
  */
-async function translateNode(node: Node): Promise<void> {
-    // 1. Collect all translatable targets from the node and its descendants
-    const targets: TranslationTarget[] = [];
-    collectTranslationTargets(node, targets);
-
-    if (targets.length === 0) {
-        return; // No translation needed for this node
+function cleanupNode(node: Node) {
+    // Recurse for element nodes, handle all children
+    if (node.nodeType === 1) {
+        // Use a static copy of child nodes in case the list is modified during iteration
+        const children = Array.from(node.childNodes);
+        for (const child of children) {
+            cleanupNode(child);
+        }
     }
+
+    // Process text nodes
+    if (node.nodeType === 3 && node.textContent) {
+        let currentText = node.textContent;
+        let modified = false;
+        for (const regex of deletionRegexes) {
+            if (regex.test(currentText)) {
+                currentText = currentText.replace(regex, '');
+                modified = true;
+            }
+        }
+        // Only update the DOM if a change was made to avoid unnecessary mutation events
+        if (modified) {
+            node.textContent = currentText;
+        }
+    }
+}
+
+/**
+  * Translates a single DOM node and its children.
+  * @param node The DOM node to translate.
+  */
+ async function translateNode(node: Node): Promise<void> {
+    // Step 0: Clean the node using deletion regexes before doing anything else.
+    cleanupNode(node);
+
+     // 1. Collect all translatable targets from the node and its descendants
+     const targets: TranslationTarget[] = [];
+     collectTranslationTargets(node, targets);
+ 
+     if (targets.length === 0) {
+         return; // No translation needed for this node
+     }
 
     // 2. Batch translate the text from all targets
     const originalTexts = targets.map(target => target.getText() || '');
