@@ -122,8 +122,8 @@ function parseDeletionRegexes() {
         const trimmedLine = line.trim();
         if (trimmedLine) {
             try {
-                // Add 'g' flag for global replacement
-                newRegexes.push(new RegExp(trimmedLine, 'g'));
+                // Add 'g' (global) and 's' (dotAll for multiline) flags for robust replacement
+                newRegexes.push(new RegExp(trimmedLine, 'gs'));
             } catch (e) {
                 console.error(`Translator: Invalid regex: "${trimmedLine}"`, e);
             }
