@@ -195,6 +195,13 @@ function parseDeletionRegexes() {
         }
     }
     deletionRegexes = newRegexes;
+
+    // After updating regexes, re-translate the visible content to apply changes immediately.
+    // This simulates a "refresh" without a full page load.
+    const iframe = document.querySelector('iframe[name="chat_iframe"]') as HTMLIFrameElement | null;
+    if (iframe) {
+        translateIframeContent(iframe);
+    }
 }
 
 /**
@@ -372,10 +379,8 @@ const observedIframes = new WeakSet<HTMLIFrameElement>();
  */
 export async function translateIframeContent(iframe: HTMLIFrameElement): Promise<void> {
     try {
-        // Ensure we only attach one observer per iframe to prevent duplicates
-        if (observedIframes.has(iframe)) {
-            return;
-        }
+        // We now allow re-translating an observed iframe to apply new rules.
+        // The logic inside will handle the observer correctly.
 
         const body = iframe.contentWindow?.document.body;
         if (!body) {
