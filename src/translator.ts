@@ -71,6 +71,7 @@ function collectTranslationTargets(node: Node, targets: TranslationTarget[]) {
  */
 // In-memory cache for the custom dictionary
 let customDictionary: Map<string, string> = new Map();
+let deletionRegexes: RegExp[] = [];
 
 /**
  * Parses the dictionary text from the textarea and updates the in-memory map.
@@ -107,18 +108,62 @@ function saveCustomDictionary() {
 }
 
 /**
- * Loads the custom dictionary from localStorage and sets up event listeners.
+ * Parses the deletion regexes from the textarea and updates the in-memory array.
+ */
+function parseDeletionRegexes() {
+    const textarea = document.getElementById('deletion-regexes') as HTMLTextAreaElement | null;
+    if (!textarea) return;
+
+    const text = textarea.value;
+    const newRegexes: RegExp[] = [];
+    const lines = text.split('\n');
+
+    for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (trimmedLine) {
+            try {
+                // Add 'g' flag for global replacement
+                newRegexes.push(new RegExp(trimmedLine, 'g'));
+            } catch (e) {
+                console.error(`Translator: Invalid regex: "${trimmedLine}"`, e);
+            }
+        }
+    }
+    deletionRegexes = newRegexes;
+}
+
+/**
+ * Saves the deletion regexes to localStorage.
+ */
+function saveDeletionRegexes() {
+    const textarea = document.getElementById('deletion-regexes') as HTMLTextAreaElement | null;
+    if (textarea) {
+        localStorage.setItem('deletion-regexes', textarea.value);
+    }
+}
+
+/**
+ * Loads the custom dictionary and deletion regexes from localStorage
+ * and sets up event listeners.
  * This should be called once when the UI is initialized.
  */
-export function initializeCustomDictionary() {
-    const textarea = document.getElementById('custom-dictionary') as HTMLTextAreaElement | null;
-    if (textarea) {
-        textarea.value = localStorage.getItem('custom-dictionary') || '';
-        // Parse the initial content
+export function initializeTranslator() {
+    // Initialize Custom Dictionary
+    const dictionaryTextarea = document.getElementById('custom-dictionary') as HTMLTextAreaElement | null;
+    if (dictionaryTextarea) {
+        dictionaryTextarea.value = localStorage.getItem('custom-dictionary') || '';
         parseCustomDictionary();
-        // Add event listeners to update the dictionary on change and save it
-        textarea.addEventListener('input', parseCustomDictionary);
-        textarea.addEventListener('change', saveCustomDictionary);
+        dictionaryTextarea.addEventListener('input', parseCustomDictionary);
+        dictionaryTextarea.addEventListener('change', saveCustomDictionary);
+    }
+
+    // Initialize Deletion Regexes
+    const regexTextarea = document.getElementById('deletion-regexes') as HTMLTextAreaElement | null;
+    if (regexTextarea) {
+        regexTextarea.value = localStorage.getItem('deletion-regexes') || '';
+        parseDeletionRegexes();
+        regexTextarea.addEventListener('input', parseDeletionRegexes);
+        regexTextarea.addEventListener('change', saveDeletionRegexes);
     }
 }
 
@@ -130,11 +175,20 @@ export function initializeCustomDictionary() {
  * @returns A promise that resolves with the translated texts.
  */
 function translateBatch(originalTexts: string[]): Promise<string[]> {
+    // Step 1: Apply deletion regexes first.
+    const cleanedTexts = originalTexts.map(text => {
+        let currentText = text;
+        for (const regex of deletionRegexes) {
+            currentText = currentText.replace(regex, '');
+        }
+        return currentText;
+    });
+
     const textsForServer: string[] = [];
     const placeholderMaps: Map<string, string>[] = [];
 
-    // Step 1: Pre-process texts. Replace dictionary words with placeholders.
-    originalTexts.forEach(text => {
+    // Step 2: Pre-process texts. Replace dictionary words with placeholders.
+    cleanedTexts.forEach(text => {
         let processedText = text;
         const currentPlaceholderMap = new Map<string, string>();
         let placeholderIndex = 0;
