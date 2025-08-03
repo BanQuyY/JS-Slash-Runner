@@ -368,8 +368,8 @@ function translateBatch(originalTexts: string[]): Promise<string[]> {
     }
 }
 
-// Use a WeakSet to keep track of iframes that are already being observed
-const observedIframes = new WeakSet<HTMLIFrameElement>();
+// Use a WeakMap to store the observer for each iframe, allowing us to disconnect it later.
+const observedIframes = new WeakMap<HTMLIFrameElement, MutationObserver>();
 
 /**
  * Finds all Chinese text within a live iframe's body, translates it,
@@ -379,8 +379,11 @@ const observedIframes = new WeakSet<HTMLIFrameElement>();
  */
 export async function translateIframeContent(iframe: HTMLIFrameElement): Promise<void> {
     try {
-        // We now allow re-translating an observed iframe to apply new rules.
-        // The logic inside will handle the observer correctly.
+        // If an observer is already attached to this iframe, disconnect it first.
+        // This ensures we're starting fresh when rules are updated.
+        if (observedIframes.has(iframe)) {
+            observedIframes.get(iframe)?.disconnect();
+        }
 
         const body = iframe.contentWindow?.document.body;
         if (!body) {
@@ -389,16 +392,16 @@ export async function translateIframeContent(iframe: HTMLIFrameElement): Promise
         }
 
         // 1. Perform an initial translation of the entire document body
-        // The custom dictionary is assumed to be initialized and parsed already.
         await translateNode(body);
 
-        // 3. Set up an observer to handle dynamically added/changed content
+        // 2. Set up a new observer to handle dynamically added/changed content
         const observer = new MutationObserver(async (mutations) => {
-            // Disconnect the observer temporarily to prevent infinite loops
+            // Disconnect the observer temporarily to prevent infinite loops during translation
             observer.disconnect();
 
             const nodesToTranslate = new Set<Node>();
             for (const mutation of mutations) {
+                // Logic to collect nodes remains the same...
                 switch (mutation.type) {
                     case 'childList':
                         mutation.addedNodes.forEach(node => {
@@ -411,8 +414,6 @@ export async function translateIframeContent(iframe: HTMLIFrameElement): Promise
                         nodesToTranslate.add(mutation.target);
                         break;
                     case 'characterData':
-                        // If a text node's data changes, re-translate its parent
-                        // to handle the change in context.
                         if (mutation.target.parentElement) {
                             nodesToTranslate.add(mutation.target.parentElement);
                         }
@@ -429,15 +430,13 @@ export async function translateIframeContent(iframe: HTMLIFrameElement): Promise
                 }
             }
 
-            // 4. Reconnect the observer to watch for future changes
+            // Reconnect the observer to watch for future changes
             startObserver(observer, body);
         });
 
-        // 3. Start observing the iframe body for changes
+        // 3. Start observing and store the new observer in our map
         startObserver(observer, body);
-
-        // Mark this iframe as observed so we don't attach another observer
-        observedIframes.add(iframe);
+        observedIframes.set(iframe, observer);
 
     } catch (error) {
         console.error("Translator: Failed to translate iframe content.", error);
