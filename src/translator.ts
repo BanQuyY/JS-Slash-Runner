@@ -160,6 +160,12 @@ function parseCustomDictionary() {
         }
     }
     customDictionary = newDictionary;
+
+    // Trigger a refresh whenever the dictionary changes.
+    const iframe = document.querySelector('iframe[name="chat_iframe"]') as HTMLIFrameElement | null;
+    if (iframe) {
+        translateIframeContent(iframe);
+    }
 }
 
 /**
