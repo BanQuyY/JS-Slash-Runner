@@ -248,43 +248,27 @@ function translateBatch(originalTexts: string[]): Promise<string[]> {
  * @param iframe The live HTMLIFrameElement to translate.
  */
 /**
- * Recursively traverses a DOM node and applies deletion regexes to all text nodes.
- * @param node The DOM node to clean.
- */
-function cleanupNode(node: Node) {
-    // Recurse for element nodes, handle all children
-    if (node.nodeType === 1) {
-        // Use a static copy of child nodes in case the list is modified during iteration
-        const children = Array.from(node.childNodes);
-        for (const child of children) {
-            cleanupNode(child);
-        }
-    }
-
-    // Process text nodes
-    if (node.nodeType === 3 && node.textContent) {
-        let currentText = node.textContent;
-        let modified = false;
-        for (const regex of deletionRegexes) {
-            if (regex.test(currentText)) {
-                currentText = currentText.replace(regex, '');
-                modified = true;
-            }
-        }
-        // Only update the DOM if a change was made to avoid unnecessary mutation events
-        if (modified) {
-            node.textContent = currentText;
-        }
-    }
-}
-
-/**
   * Translates a single DOM node and its children.
   * @param node The DOM node to translate.
   */
  async function translateNode(node: Node): Promise<void> {
-    // Step 0: Clean the node using deletion regexes before doing anything else.
-    cleanupNode(node);
+    // Step 0: Clean the node's innerHTML using deletion regexes before translation.
+    // This approach works on the raw HTML, allowing regex to match tags.
+    if (node.nodeType === 1 && deletionRegexes.length > 0) { // Check if it's an Element
+        const element = node as Element;
+        let originalHTML = element.innerHTML;
+        let cleanedHTML = originalHTML;
+
+        for (const regex of deletionRegexes) {
+            cleanedHTML = cleanedHTML.replace(regex, '');
+        }
+
+        // Only update the DOM if changes were actually made to prevent
+        // unnecessary re-renders and potential observer loops.
+        if (originalHTML !== cleanedHTML) {
+            element.innerHTML = cleanedHTML;
+        }
+    }
 
      // 1. Collect all translatable targets from the node and its descendants
      const targets: TranslationTarget[] = [];
