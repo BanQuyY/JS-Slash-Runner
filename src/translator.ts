@@ -161,7 +161,12 @@ function parseCustomDictionary() {
     }
     customDictionary = newDictionary;
 
-    // Trigger a refresh whenever the dictionary changes.
+}
+
+/**
+ * Finds the chat iframe and triggers a full re-translation.
+ */
+function refreshTranslation() {
     const iframe = document.querySelector('iframe[name="chat_iframe"]') as HTMLIFrameElement | null;
     if (iframe) {
         translateIframeContent(iframe);
@@ -202,12 +207,6 @@ function parseDeletionRegexes() {
     }
     deletionRegexes = newRegexes;
 
-    // After updating regexes, re-translate the visible content to apply changes immediately.
-    // This simulates a "refresh" without a full page load.
-    const iframe = document.querySelector('iframe[name="chat_iframe"]') as HTMLIFrameElement | null;
-    if (iframe) {
-        translateIframeContent(iframe);
-    }
 }
 
 /**
@@ -230,8 +229,11 @@ export function initializeTranslator() {
     const dictionaryTextarea = document.getElementById('custom-dictionary') as HTMLTextAreaElement | null;
     if (dictionaryTextarea) {
         dictionaryTextarea.value = localStorage.getItem('custom-dictionary') || '';
-        parseCustomDictionary();
-        dictionaryTextarea.addEventListener('input', parseCustomDictionary);
+        parseCustomDictionary(); // Initial parse
+        dictionaryTextarea.addEventListener('input', () => {
+            parseCustomDictionary();
+            refreshTranslation();
+        });
         dictionaryTextarea.addEventListener('change', saveCustomDictionary);
     }
 
@@ -239,8 +241,11 @@ export function initializeTranslator() {
     const regexTextarea = document.getElementById('deletion-regexes') as HTMLTextAreaElement | null;
     if (regexTextarea) {
         regexTextarea.value = localStorage.getItem('deletion-regexes') || '';
-        parseDeletionRegexes();
-        regexTextarea.addEventListener('input', parseDeletionRegexes);
+        parseDeletionRegexes(); // Initial parse
+        regexTextarea.addEventListener('input', () => {
+            parseDeletionRegexes();
+            refreshTranslation();
+        });
         regexTextarea.addEventListener('change', saveDeletionRegexes);
     }
 }
