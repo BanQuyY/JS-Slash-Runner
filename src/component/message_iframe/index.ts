@@ -15,6 +15,7 @@ import {
   removeRenderingOptimizeSettings,
 } from '@/component/message_iframe/render_optimize';
 import { initializeTranslator } from '@/translator';
+import { Collapsible } from '@/util/collapsible';
 import { getSettingValue, saveSettingValue } from '@/util/extension_variables';
 
 import { reloadCurrentChat, this_chid } from '@sillytavern/script';
@@ -176,6 +177,12 @@ export async function initIframePanel() {
 
   // Initialize the custom dictionary regardless of the translator toggle state
   initializeTranslator();
+
+  // Initialize collapsible sections
+  Collapsible.initAll('.collapsible', {
+    headerSelector: '.collapsible-header',
+    contentSelector: '.collapsible-content',
+  });
 }
 
 /**

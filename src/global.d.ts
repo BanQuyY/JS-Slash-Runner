@@ -1,3 +1,6 @@
+/// <reference types="jquery" />
+/// <reference types="toastr" />
+
 declare module '*?raw' {
   const content: string;
   export default content;

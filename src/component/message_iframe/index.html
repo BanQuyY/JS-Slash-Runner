@@ -76,28 +76,32 @@
   </div>
 </div>
 <div class="divider"></div>
-<div class="extension-content-item">
-  <div class="flex flexFlowColumn">
-    <div class="settings-title-text">Từ điển tùy chỉnh</div>
-    <div class="settings-title-description">
-      Mỗi dòng một cặp, định dạng: <b>Tên gốc=Tên đã sửa</b><br />
-      Hệ thống sẽ ưu tiên từ điển này trước khi dịch tự động.
+<div class="extension-content-item box-container collapsible flexFlowColumn" style="align-items: flex-start">
+  <div class="collapsible-header flex-container spaceBetween alignItemsCenter width100p">
+    <div class="flex flexFlowColumn">
+      <div class="settings-title-text">Từ điển tùy chỉnh</div>
+      <div class="settings-title-description">
+        Mỗi dòng một cặp, định dạng: <b>Tên gốc=Tên đã sửa</b><br />
+        Hệ thống sẽ ưu tiên từ điển này trước khi dịch tự động.
+      </div>
     </div>
   </div>
-</div>
-<div class="extension-content-item">
-  <textarea id="custom-dictionary" class="textarea" rows="5" placeholder="Ví dụ:&#10;李秀=Lý Tú&#10;杨澜=Dương Lan"></textarea>
+  <div class="collapsible-content width100p">
+    <textarea id="custom-dictionary" class="textarea" rows="5" placeholder="Ví dụ:&#10;李秀=Lý Tú&#10;杨澜=Dương Lan"></textarea>
+  </div>
 </div>
 <div class="divider"></div>
-<div class="extension-content-item">
-  <div class="flex flexFlowColumn">
-    <div class="settings-title-text">Quy tắc xóa tùy chỉnh (Regex)</div>
-    <div class="settings-title-description">
-      Mỗi dòng một biểu thức chính quy (regex).<br />
-      Nội dung khớp với bất kỳ quy tắc nào sẽ bị xóa trước khi dịch.
+<div class="extension-content-item box-container collapsible flexFlowColumn" style="align-items: flex-start">
+  <div class="collapsible-header flex-container spaceBetween alignItemsCenter width100p">
+    <div class="flex flexFlowColumn">
+      <div class="settings-title-text">Quy tắc xóa tùy chỉnh (Regex)</div>
+      <div class="settings-title-description">
+        Mỗi dòng một biểu thức chính quy (regex).<br />
+        Nội dung khớp với bất kỳ quy tắc nào sẽ bị xóa trước khi dịch.
+      </div>
     </div>
   </div>
-</div>
-<div class="extension-content-item">
-  <textarea id="deletion-regexes" class="textarea" rows="5" placeholder="Ví dụ:&#10;<safety_check>.*</safety_check>"></textarea>
+  <div class="collapsible-content width100p">
+    <textarea id="deletion-regexes" class="textarea" rows="5" placeholder="Ví dụ:&#10;<safety_check>.*</safety_check>"></textarea>
+  </div>
 </div>
