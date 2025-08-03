@@ -12,3 +12,8 @@ declare module '*.css' {
 }
 
 declare const hljs: typeof import('highlight.js').default;
+
+
+interface XMLHttpRequest {
+    _url: string | URL;
+}

@@ -1,6 +1,71 @@
 const stvServer = "comic.sangtacvietcdn.xyz/tsm.php?cdn=";
 const chineseRegex = /[\u3400-\u9FBF]/;
+const oldOpen = XMLHttpRequest.prototype.open;
 const oldSend = XMLHttpRequest.prototype.send;
+
+// --- Global XHR Interceptor for Data Cleaning ---
+XMLHttpRequest.prototype.open = function (method: string, url: string | URL) {
+    // Store the URL for later checks in send()
+    this._url = url;
+    return oldOpen.apply(this, arguments as any);
+};
+
+XMLHttpRequest.prototype.send = function (body) {
+    const originalOnReadyStateChange = this.onreadystatechange;
+
+    this.onreadystatechange = function () {
+        // Only process when the request is complete and successful
+        if (this.readyState === 4 && this.status === 200) {
+            // Check if this is a response we want to modify (e.g., chat history)
+            // This URL part is an assumption and might need adjustment for different Tavern versions.
+            const isChatUrl = typeof this._url === 'string' && (this._url.includes('/api/chats/') || this._url.includes('get_chat_ajax'));
+
+            if (isChatUrl && this.responseText) {
+                try {
+                    let responseData = JSON.parse(this.responseText);
+                    let modified = false;
+
+                    // The actual data structure might be responseData.chat.messages or similar
+                    // We need to find the array of messages. This is a common structure.
+                    const messages = responseData.chat?.messages || responseData.messages || responseData;
+
+                    if (Array.isArray(messages)) {
+                        for (const message of messages) {
+                            // Look for the message content field, typically 'mes' or 'message'
+                            if (typeof message.mes === 'string') {
+                                let originalMes = message.mes;
+                                for (const regex of deletionRegexes) {
+                                    message.mes = message.mes.replace(regex, '');
+                                }
+                                if (originalMes !== message.mes) {
+                                    modified = true;
+                                }
+                            }
+                        }
+                    }
+
+                    if (modified) {
+                        const cleanedResponseText = JSON.stringify(responseData);
+                        // Redefine the responseText property to return our modified version
+                        Object.defineProperty(this, 'responseText', {
+                            value: cleanedResponseText,
+                            writable: false,
+                        });
+                    }
+                } catch (e) {
+                    console.error("Translator (Cleaner): Failed to parse or modify response.", e);
+                }
+            }
+        }
+
+        // Call the original onreadystatechange handler if it exists
+        if (originalOnReadyStateChange) {
+            originalOnReadyStateChange.apply(this, arguments as any);
+        }
+    };
+
+    return oldSend.apply(this, arguments as any);
+};
 
 /**
  * Defines a target for translation, which can be a text node or an element's attribute.
@@ -184,7 +249,11 @@ function translateBatch(originalTexts: string[]): Promise<string[]> {
         const currentPlaceholderMap = new Map<string, string>();
         let placeholderIndex = 0;
 
-        customDictionary.forEach((translated, original) => {
+        // Sort dictionary keys by length descending to match longer keys first
+        const sortedKeys = Array.from(customDictionary.keys()).sort((a, b) => b.length - a.length);
+
+        sortedKeys.forEach(original => {
+            const translated = customDictionary.get(original)!;
             if (processedText.includes(original)) {
                 const placeholder = `__D${placeholderIndex}__`;
                 // Use a regex to replace all occurrences
@@ -238,6 +307,7 @@ function translateBatch(originalTexts: string[]): Promise<string[]> {
         };
         ajax.open("POST", `//${stvServer}/`, true);
         ajax.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+        // Use the original send method for our own requests to avoid loops
         oldSend.apply(ajax, ["sajax=trans&content=" + encodeURIComponent(joinedText)]);
     });
 }
@@ -252,23 +322,8 @@ function translateBatch(originalTexts: string[]): Promise<string[]> {
   * @param node The DOM node to translate.
   */
  async function translateNode(node: Node): Promise<void> {
-    // Step 0: Clean the node's innerHTML using deletion regexes before translation.
-    // This approach works on the raw HTML, allowing regex to match tags.
-    if (node.nodeType === 1 && deletionRegexes.length > 0) { // Check if it's an Element
-        const element = node as Element;
-        let originalHTML = element.innerHTML;
-        let cleanedHTML = originalHTML;
-
-        for (const regex of deletionRegexes) {
-            cleanedHTML = cleanedHTML.replace(regex, '');
-        }
-
-        // Only update the DOM if changes were actually made to prevent
-        // unnecessary re-renders and potential observer loops.
-        if (originalHTML !== cleanedHTML) {
-            element.innerHTML = cleanedHTML;
-        }
-    }
+    // The cleaning logic is now handled by the global XHR interceptor.
+    // This function will now only handle translation.
 
      // 1. Collect all translatable targets from the node and its descendants
      const targets: TranslationTarget[] = [];
