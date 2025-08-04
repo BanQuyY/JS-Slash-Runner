@@ -381,52 +381,95 @@ function translateWithSTV(joinedText: string, placeholderMaps: Map<string, strin
  */
 function translateWithDichNhanh(joinedText: string, placeholderMaps: Map<string, string>[]): Promise<string[]> {
     return new Promise((resolve, reject) => {
-        const ajax = new XMLHttpRequest();
-        ajax.onreadystatechange = function () {
-            if (this.readyState == 4) {
-                if (this.status == 200) {
-                    try {
-                        // DichNhanh trả về JSON
-                        const response = JSON.parse(this.responseText);
-                        
-                        // Kiểm tra xem có dữ liệu dịch không
-                        if (response && response.data && response.data.text) {
-                            // DichNhanh trả về một chuỗi duy nhất, cần tách lại thành mảng
-                            const translatedText = response.data.text;
-                            const translatedFromServer = translatedText.split("=|==|=");
+        try {
+            const ajax = new XMLHttpRequest();
+            
+            // Thiết lập xử lý lỗi và fallback
+            let fallbackToSTV = false;
+            
+            ajax.onreadystatechange = function () {
+                if (this.readyState == 4) {
+                    if (this.status == 200) {
+                        try {
+                            // DichNhanh trả về JSON
+                            const response = JSON.parse(this.responseText);
                             
-                            // Post-process. Replace placeholders back.
-                            const finalResults = translatedFromServer.map((text, i) => {
-                                let result = text;
-                                const currentPlaceholderMap = placeholderMaps[i];
-                                currentPlaceholderMap.forEach((translated, placeholder) => {
-                                    result = result.replace(new RegExp(placeholder, 'g'), translated);
+                            // Kiểm tra xem có dữ liệu dịch không
+                            if (response && response.data && response.data.text) {
+                                // DichNhanh trả về một chuỗi duy nhất, cần tách lại thành mảng
+                                const translatedText = response.data.text;
+                                const translatedFromServer = translatedText.split("=|==|=");
+                                
+                                // Post-process. Replace placeholders back.
+                                const finalResults = translatedFromServer.map((text, i) => {
+                                    let result = text;
+                                    const currentPlaceholderMap = placeholderMaps[i];
+                                    currentPlaceholderMap.forEach((translated, placeholder) => {
+                                        result = result.replace(new RegExp(placeholder, 'g'), translated);
+                                    });
+                                    return result;
                                 });
-                                return result;
-                            });
-                            resolve(finalResults);
-                        } else {
-                            reject(new Error("DichNhanh translation server returned invalid data"));
+                                resolve(finalResults);
+                            } else {
+                                console.warn("DichNhanh translation server returned invalid data, falling back to SangTacViet");
+                                fallbackToSTV = true;
+                                translateWithSTV(joinedText, placeholderMaps).then(resolve).catch(reject);
+                            }
+                        } catch (e) {
+                            console.warn(`Failed to parse DichNhanh response: ${e.message}, falling back to SangTacViet`);
+                            fallbackToSTV = true;
+                            translateWithSTV(joinedText, placeholderMaps).then(resolve).catch(reject);
                         }
-                    } catch (e) {
-                        reject(new Error(`Failed to parse DichNhanh response: ${e.message}`));
+                    } else if (this.status !== 0) { // Bỏ qua status 0 vì nó thường là lỗi CORS
+                        console.warn(`DichNhanh translation server failed with status ${this.status}, falling back to SangTacViet`);
+                        fallbackToSTV = true;
+                        translateWithSTV(joinedText, placeholderMaps).then(resolve).catch(reject);
                     }
-                } else {
-                    reject(new Error(`DichNhanh translation server failed with status ${this.status}`));
                 }
-            }
-        };
-        ajax.open("POST", `https://${dichNhanhServer}/`, true);
-        ajax.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-        ajax.setRequestHeader("accept", "application/json, text/plain, */*");
-        ajax.setRequestHeader("accept-language", "vi,en-US;q=0.9,en;q=0.8");
-        ajax.setRequestHeader("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
-        
-        // Chuẩn bị dữ liệu cho DichNhanh API
-        const data = `type=Ancient&enable_analyze=1&enable_fanfic=0&mode=vi&text=${encodeURIComponent(joinedText)}&remove=`;
-        
-        // Use the original send method for our own requests to avoid loops
-        oldSend.apply(ajax, [data]);
+            };
+            
+            // Xử lý lỗi CORS và các lỗi khác
+            ajax.onerror = function() {
+                console.warn("Error occurred with DichNhanh API (likely CORS), falling back to SangTacViet");
+                if (!fallbackToSTV) {
+                    fallbackToSTV = true;
+                    translateWithSTV(joinedText, placeholderMaps).then(resolve).catch(reject);
+                }
+            };
+            
+            // Thiết lập timeout để tránh chờ quá lâu
+            ajax.timeout = 5000; // 5 giây
+            ajax.ontimeout = function() {
+                console.warn("DichNhanh API request timed out, falling back to SangTacViet");
+                if (!fallbackToSTV) {
+                    fallbackToSTV = true;
+                    translateWithSTV(joinedText, placeholderMaps).then(resolve).catch(reject);
+                }
+            };
+            
+            // Thử sử dụng CORS proxy nếu có thể
+            // Lưu ý: Đây là một proxy công cộng, có thể không ổn định hoặc bị giới hạn
+            const corsProxy = "https://corsproxy.io/?";
+            const apiUrl = `${corsProxy}https://${dichNhanhServer}/`;
+            
+            ajax.open("POST", apiUrl, true);
+            ajax.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+            ajax.setRequestHeader("accept", "application/json, text/plain, */*");
+            
+            // Bỏ các header không an toàn
+            // ajax.setRequestHeader("accept-language", "vi,en-US;q=0.9,en;q=0.8");
+            // ajax.setRequestHeader("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
+            
+            // Chuẩn bị dữ liệu cho DichNhanh API
+            const data = `type=Ancient&enable_analyze=1&enable_fanfic=0&mode=vi&text=${encodeURIComponent(joinedText)}&remove=`;
+            
+            // Use the original send method for our own requests to avoid loops
+            oldSend.apply(ajax, [data]);
+        } catch (error) {
+            console.error("Failed to initialize DichNhanh translation request:", error);
+            // Fallback to STV in case of any initialization errors
+            translateWithSTV(joinedText, placeholderMaps).then(resolve).catch(reject);
+        }
     });
 }
 
