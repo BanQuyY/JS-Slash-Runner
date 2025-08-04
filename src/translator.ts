@@ -1,4 +1,10 @@
+// Các URL máy chủ dịch
 const stvServer = "comic.sangtacvietcdn.xyz/tsm.php?cdn=";
+const dichNhanhServer = "api.dichnhanh.com";
+
+// Biến lưu trữ nhà cung cấp dịch thuật hiện tại
+let currentTranslationProvider = "stv"; // Mặc định là SangTacViet
+
 const chineseRegex = /[\u3400-\u9FBF]/;
 const oldOpen = XMLHttpRequest.prototype.open;
 const oldSend = XMLHttpRequest.prototype.send;
@@ -225,6 +231,23 @@ function saveDeletionRegexes() {
  * This should be called once when the UI is initialized.
  */
 export function initializeTranslator() {
+    // Initialize Translation Provider
+    const providerSelect = document.getElementById('translation-provider') as HTMLSelectElement | null;
+    if (providerSelect) {
+        // Đọc lựa chọn từ localStorage hoặc sử dụng giá trị mặc định
+        const savedProvider = localStorage.getItem('translation-provider') || 'stv';
+        providerSelect.value = savedProvider;
+        currentTranslationProvider = savedProvider;
+        
+        // Thiết lập event listener để lưu lựa chọn khi thay đổi
+        providerSelect.addEventListener('change', () => {
+            const selectedProvider = providerSelect.value;
+            localStorage.setItem('translation-provider', selectedProvider);
+            currentTranslationProvider = selectedProvider;
+            refreshTranslation(); // Dịch lại nội dung với nhà cung cấp mới
+        });
+    }
+
     // Initialize Custom Dictionary
     const dictionaryTextarea = document.getElementById('custom-dictionary') as HTMLTextAreaElement | null;
     if (dictionaryTextarea) {
@@ -306,6 +329,24 @@ function translateBatch(originalTexts: string[]): Promise<string[]> {
         return Promise.resolve(finalResults);
     }
 
+    // Tùy thuộc vào nhà cung cấp dịch được chọn
+    if (currentTranslationProvider === 'stv') {
+        // Sử dụng SangTacViet API
+        return translateWithSTV(joinedText, placeholderMaps);
+    } else if (currentTranslationProvider === 'dichnhanh') {
+        // Sử dụng DichNhanh API
+        return translateWithDichNhanh(joinedText, placeholderMaps);
+    } else {
+        // Mặc định sử dụng SangTacViet nếu không xác định được
+        console.warn(`Translator: Unknown provider "${currentTranslationProvider}", falling back to SangTacViet`);
+        return translateWithSTV(joinedText, placeholderMaps);
+    }
+}
+
+/**
+ * Dịch văn bản sử dụng API SangTacViet
+ */
+function translateWithSTV(joinedText: string, placeholderMaps: Map<string, string>[]): Promise<string[]> {
     return new Promise((resolve, reject) => {
         const ajax = new XMLHttpRequest();
         ajax.onreadystatechange = function () {
@@ -313,7 +354,7 @@ function translateBatch(originalTexts: string[]): Promise<string[]> {
                 if (this.status == 200) {
                     const translatedFromServer = this.responseText.split("=|==|=");
                     
-                    // Step 3: Post-process. Replace placeholders back.
+                    // Post-process. Replace placeholders back.
                     const finalResults = translatedFromServer.map((translatedText, i) => {
                         let result = translatedText;
                         const currentPlaceholderMap = placeholderMaps[i];
@@ -324,7 +365,7 @@ function translateBatch(originalTexts: string[]): Promise<string[]> {
                     });
                     resolve(finalResults);
                 } else {
-                    reject(new Error(`Translation server failed with status ${this.status}`));
+                    reject(new Error(`SangTacViet translation server failed with status ${this.status}`));
                 }
             }
         };
@@ -332,6 +373,60 @@ function translateBatch(originalTexts: string[]): Promise<string[]> {
         ajax.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
         // Use the original send method for our own requests to avoid loops
         oldSend.apply(ajax, ["sajax=trans&content=" + encodeURIComponent(joinedText)]);
+    });
+}
+
+/**
+ * Dịch văn bản sử dụng API DichNhanh
+ */
+function translateWithDichNhanh(joinedText: string, placeholderMaps: Map<string, string>[]): Promise<string[]> {
+    return new Promise((resolve, reject) => {
+        const ajax = new XMLHttpRequest();
+        ajax.onreadystatechange = function () {
+            if (this.readyState == 4) {
+                if (this.status == 200) {
+                    try {
+                        // DichNhanh trả về JSON
+                        const response = JSON.parse(this.responseText);
+                        
+                        // Kiểm tra xem có dữ liệu dịch không
+                        if (response && response.data && response.data.text) {
+                            // DichNhanh trả về một chuỗi duy nhất, cần tách lại thành mảng
+                            const translatedText = response.data.text;
+                            const translatedFromServer = translatedText.split("=|==|=");
+                            
+                            // Post-process. Replace placeholders back.
+                            const finalResults = translatedFromServer.map((text, i) => {
+                                let result = text;
+                                const currentPlaceholderMap = placeholderMaps[i];
+                                currentPlaceholderMap.forEach((translated, placeholder) => {
+                                    result = result.replace(new RegExp(placeholder, 'g'), translated);
+                                });
+                                return result;
+                            });
+                            resolve(finalResults);
+                        } else {
+                            reject(new Error("DichNhanh translation server returned invalid data"));
+                        }
+                    } catch (e) {
+                        reject(new Error(`Failed to parse DichNhanh response: ${e.message}`));
+                    }
+                } else {
+                    reject(new Error(`DichNhanh translation server failed with status ${this.status}`));
+                }
+            }
+        };
+        ajax.open("POST", `https://${dichNhanhServer}/`, true);
+        ajax.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+        ajax.setRequestHeader("accept", "application/json, text/plain, */*");
+        ajax.setRequestHeader("accept-language", "vi,en-US;q=0.9,en;q=0.8");
+        ajax.setRequestHeader("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
+        
+        // Chuẩn bị dữ liệu cho DichNhanh API
+        const data = `type=Ancient&enable_analyze=1&enable_fanfic=0&mode=vi&text=${encodeURIComponent(joinedText)}&remove=`;
+        
+        // Use the original send method for our own requests to avoid loops
+        oldSend.apply(ajax, [data]);
     });
 }
 
