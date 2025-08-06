@@ -5,6 +5,7 @@ import {
 import { extractTextFromCode } from '@/component/message_iframe/utils';
 import { script_url } from '@/script_url';
 import third_party from '@/third_party.html';
+import { translateIframeContent } from '@/translator';
 import { getCharAvatarPath, getSettingValue, getUserAvatarPath, saveSettingValue } from '@/util/extension_variables';
 
 import { eventSource, event_types, reloadCurrentChat, this_chid, updateMessageBlock } from '@sillytavern/script';
@@ -166,6 +167,7 @@ async function renderMessagesInIframes(mode = RENDER_MODES.FULL, specificMesId: 
 
         $iframe.on('load', function () {
           observeIframeContent(this);
+          translateIframeContent(this);
 
           $wrapper = $(this).parent();
           if ($wrapper.length) {

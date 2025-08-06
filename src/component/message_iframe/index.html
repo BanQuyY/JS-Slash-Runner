@@ -62,3 +62,39 @@
     </label>
   </div>
 </div>
+
+<div class="divider"></div>
+<div class="major-divider-container">
+    <div class="major-divider-text"><i class="fa-solid fa-language margin-r5"></i>Dịch thuật</div>
+    <div class="major-divider-line"></div>
+</div>
+
+<!-- Translation Provider -->
+<div class="extension-content-item">
+    <div class="flex flexFlowColumn">
+        <div class="settings-title-text">Nhà cung cấp Dịch thuật</div>
+        <div class="settings-title-description">Chọn dịch vụ để dịch văn bản.</div>
+    </div>
+    <select id="translation-provider" class="TavernHelper-select">
+        <option value="stv">SangTacViet</option>
+        <option value="dichnhanh">DichNhanh</option>
+    </select>
+</div>
+
+<!-- Custom Dictionary -->
+<div class="extension-content-item flexFlowColumn" style="align-items: flex-start;">
+    <div class="flex flexFlowColumn">
+        <div class="settings-title-text">Từ điển Tùy chỉnh</div>
+        <div class="settings-title-description">Xác định các bản dịch tùy chỉnh. Mỗi mục một dòng, định dạng: Nguyên bản=Dịch.</div>
+    </div>
+    <textarea id="custom-dictionary" class="TavernHelper-textarea" rows="5" style="width: 100%; margin-top: 5px;"></textarea>
+</div>
+
+<!-- Deletion Regexes -->
+<div class="extension-content-item flexFlowColumn" style="align-items: flex-start;">
+    <div class="flex flexFlowColumn">
+        <div class="settings-title-text">Biểu thức chính quy Xóa văn bản</div>
+        <div class="settings-title-description">Xóa văn bản không mong muốn trước khi dịch. Mỗi biểu thức một dòng.</div>
+    </div>
+    <textarea id="deletion-regexes" class="TavernHelper-textarea" rows="5" style="width: 100%; margin-top: 5px;"></textarea>
+</div>

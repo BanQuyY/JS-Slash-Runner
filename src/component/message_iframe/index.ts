@@ -14,6 +14,7 @@ import {
   addRenderingOptimizeSettings,
   removeRenderingOptimizeSettings,
 } from '@/component/message_iframe/render_optimize';
+import { initializeTranslator } from '@/translator';
 import { getSettingValue, saveSettingValue } from '@/util/extension_variables';
 
 import { reloadCurrentChat, this_chid } from '@sillytavern/script';
@@ -146,6 +147,7 @@ export async function initIframePanel() {
   addRenderQuickButton();
   injectLoadingStyles();
   setupIframeRemovalListener();
+  initializeTranslator();
 }
 
 /**
