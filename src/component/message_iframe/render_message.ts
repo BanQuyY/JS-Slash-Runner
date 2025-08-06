@@ -167,7 +167,9 @@ async function renderMessagesInIframes(mode = RENDER_MODES.FULL, specificMesId: 
 
         $iframe.on('load', function () {
           observeIframeContent(this);
-          translateIframeContent(this);
+          if (getSettingValue('render.translator_enabled')) {
+            translateIframeContent(this);
+          }
 
           $wrapper = $(this).parent();
           if ($wrapper.length) {

@@ -25,6 +25,7 @@ export const defaultIframeSettings = {
   render_depth: 0,
   render_optimize: false,
   render_hide_style: false,
+  translator_enabled: false,
 };
 
 /**
@@ -142,6 +143,19 @@ export async function initIframePanel() {
     if ($('iframe[data-needs-vh="true"]').length) {
       updateIframeViewportHeight();
     }
+  });
+
+  // Handle translator enabled toggle
+  const isTranslatorEnabled = getSettingValue('render.translator_enabled') ?? defaultIframeSettings.translator_enabled;
+  $('#translator-enabled-toggle').prop('checked', isTranslatorEnabled);
+  $('#translator-controls').css('opacity', isTranslatorEnabled ? 1 : 0.5);
+
+  $('#translator-enabled-toggle').on('click', function (event: JQuery.ClickEvent) {
+    const isEnabled = (event.target as HTMLInputElement).checked;
+    saveSettingValue('render.translator_enabled', isEnabled);
+    $('#translator-controls').css('opacity', isEnabled ? 1 : 0.5);
+    // Re-render messages to apply/remove translation
+    clearAndRenderAllIframes();
   });
 
   addRenderQuickButton();

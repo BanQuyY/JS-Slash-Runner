@@ -69,8 +69,24 @@
     <div class="major-divider-line"></div>
 </div>
 
-<!-- Translation Provider -->
+<!-- Translator Enable/Disable -->
 <div class="extension-content-item">
+  <div class="flex flexFlowColumn">
+    <div class="settings-title-text">Bật Dịch thuật</div>
+    <div class="settings-title-description">Bật/tắt chức năng dịch tự động.</div>
+  </div>
+  <div class="toggle-switch">
+    <input type="checkbox" id="translator-enabled-toggle" class="toggle-input" />
+    <label for="translator-enabled-toggle" class="toggle-label">
+      <span class="toggle-handle"></span>
+    </label>
+  </div>
+</div>
+<div class="divider"></div>
+
+<div id="translator-controls">
+  <!-- Translation Provider -->
+  <div class="extension-content-item">
     <div class="flex flexFlowColumn">
         <div class="settings-title-text">Nhà cung cấp Dịch thuật</div>
         <div class="settings-title-description">Chọn dịch vụ để dịch văn bản.</div>
@@ -97,4 +113,5 @@
         <div class="settings-title-description">Xóa văn bản không mong muốn trước khi dịch. Mỗi biểu thức một dòng.</div>
     </div>
     <textarea id="deletion-regexes" class="TavernHelper-textarea" rows="5" style="width: 100%; margin-top: 5px;"></textarea>
+  </div>
 </div>
